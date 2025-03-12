@@ -4,3 +4,4 @@ streamlit-webrtc
 numpy
 av
 streamlit
+Pillow
