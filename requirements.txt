@@ -5,3 +5,4 @@ numpy
 av
 streamlit
 Pillow
+threadpoolctl
