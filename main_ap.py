@@ -119,101 +119,72 @@ def process_frame(image, prev_landmarks):
     
     return image, prev_landmarks
 
-def process_uploaded_image(uploaded_file, prev_landmarks=None):
-    # Yuklangan rasmni o'qish
-    image = Image.open(uploaded_file)
-    image = np.array(image)
-    
-    # RGB formatidan BGR formatiga o'tkazish (OpenCV RGB formatida ishlaydi)
-    if image.shape[2] == 3:  # RGB rasm
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    
-    # Rasmni qayta ishlash
-    processed_image, landmarks = process_frame(image, prev_landmarks)
-    
-    return processed_image, landmarks
-
 def main():
-    # Kamera mavjudligini tekshirish uchun flaglar
-    is_camera_available = False
+    # Input turini tanlash
+    input_type = st.sidebar.radio("Kirish turini tanlang", ["Video yuklash", "Test rejimi"])
     
-    # Kamera mavjudligini tekshirish
-    try:
-        cap = cv2.VideoCapture(0)
-        is_camera_available = cap.isOpened()
-        cap.release()  # Kamerani yopish
-    except:
-        is_camera_available = False
+    stframe = col1.empty()
     
-    # Streamlit Cloud uchun ogohlantirishni ko'rsatish
-    if not is_camera_available:
-        st.warning("⚠️ Kamera topilmadi yoki Streamlit Cloud'da ishlamoqdamiz. Kamera ishlamaydi.")
-        st.info("Tana harakatlarini aniqlash uchun rasm yuklang.")
-        
-        # Rasm yuklash imkoniyatini taqdim etish
-        uploaded_file = st.file_uploader("Rasm yuklang", type=["jpg", "jpeg", "png"])
+    if input_type == "Video yuklash":
+        uploaded_file = st.sidebar.file_uploader("Video faylni yuklang", type=["mp4", "avi", "mov"])
         
         if uploaded_file is not None:
-            # Yuklangan rasmni qayta ishlash
-            processed_image, _ = process_uploaded_image(uploaded_file)
+            # Video faylni saqlash
+            temp_file = "temp_video.mp4"
+            with open(temp_file, "wb") as f:
+                f.write(uploaded_file.read())
             
-            # Rasmni ko'rsatish
-            col1.image(processed_image, channels="BGR", use_column_width=True)
-            
-            # Tana holatlarini yangilash (statik rasm uchun harakatlangan emas)
-            for part in moving_parts.keys():
-                status_placeholders[part].write(f"{part}: Aniqlanmadi ⚪")
-            
-            st.info("Izoh: Statik rasmlar uchun harakat aniqlanmaydi.")
-        
-        # Qo'shimcha ma'lumot
-        st.markdown("""
-        ## Streamlit Cloud'da ishlash uchun 
-        1. Ilovani mahalliy (local) o'rnatib ishlatish tavsiya etiladi
-        2. Quyidagi buyruqni terminal yoki command prompt'da bajaring:
-        ```
-        streamlit run app.py
-        ```
-        """)
-    else:
-        # Kamera mavjud bo'lsa, asosiy interfeysni ko'rsatish
-        start_button = st.button("Kamerani yoqish")
-        stop_button = st.button("To'xtatish")
-        
-        stframe = col1.empty()
-        
-        # Kamerani yoqish
-        if start_button or ('camera_on' in st.session_state and st.session_state['camera_on']):
-            st.session_state['camera_on'] = True
-            
-            if stop_button:
-                st.session_state['camera_on'] = False
-                return
-            
-            cap = cv2.VideoCapture(0)
+            # Video faylni ochish
+            cap = cv2.VideoCapture(temp_file)
             prev_landmarks = None
             
-            if cap.isOpened():
-                st.write("Kamera muvaffaqiyatli ishga tushdi!")
-                
-                while st.session_state['camera_on']:
-                    success, image = cap.read()
-                    if not success:
-                        st.error("Kameradan videoni olishda xatolik yuz berdi.")
+            # Video parametrlarini olish
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            # Progress bar
+            progress_bar = st.progress(0)
+            
+            # Video qayta ishlash
+            if st.button("Videoni qayta ishlash"):
+                for i in range(frame_count):
+                    ret, frame = cap.read()
+                    if not ret:
                         break
                     
                     # Frameni qayta ishlash
-                    processed_image, prev_landmarks = process_frame(image, prev_landmarks)
+                    processed_frame, prev_landmarks = process_frame(frame, prev_landmarks)
                     
                     # Frameni ko'rsatish
-                    stframe.image(processed_image, channels="BGR", use_column_width=True)
+                    stframe.image(processed_frame, channels="BGR", use_column_width=True)
                     
-                    # Streamlit-da framerate ni pasaytirish uchun kichik kutish
-                    time.sleep(0.01)
+                    # Progress barni yangilash
+                    progress_bar.progress((i + 1) / frame_count)
+                    
+                    # FPS ni nazorat qilish
+                    time.sleep(1/fps)
                 
                 cap.release()
-            else:
-                st.error("Kamerani ishga tushirishda xatolik yuz berdi.")
+                st.success("Video qayta ishlandi!")
+    
+    elif input_type == "Test rejimi":
+        st.warning("Bu rejim test uchun mo'ljallangan. Haqiqiy kamera o'rniga test tasvir ishlatiladi.")
+        
+        # Test tasvir yaratish
+        img = np.zeros((480, 640, 3), dtype=np.uint8)
+        img.fill(200)  # Kulrang fon
+        
+        # Test tasvirga odam shaklini chizish
+        cv2.line(img, (320, 100), (320, 300), (0, 0, 255), 2)  # Tana
+        cv2.circle(img, (320, 100), 30, (0, 0, 255), -1)  # Bosh
+        cv2.line(img, (320, 150), (250, 220), (0, 0, 255), 2)  # Chap qo'l
+        cv2.line(img, (320, 150), (390, 220), (0, 0, 255), 2)  # O'ng qo'l
+        cv2.line(img, (320, 300), (280, 400), (0, 0, 255), 2)  # Chap oyoq
+        cv2.line(img, (320, 300), (360, 400), (0, 0, 255), 2)  # O'ng oyoq
+        
+        stframe.image(img, channels="BGR", use_column_width=True)
+        
+        st.info("Test rejimida harakatlarni aniqlash tavsiya etilmaydi. Haqiqiy videoni yuklang.")
     
     # Qo'shimcha ma'lumot
     with st.expander("Ilova haqida ma'lumot"):
@@ -228,7 +199,7 @@ def main():
         - Chap oyoq
         - O'ng oyoq
         
-        Ilovani ishlatish uchun "Kamerani yoqish" tugmasini bosing yoki rasm yuklang.
+        Ilovani ishlatish uchun video faylni yuklang va "Videoni qayta ishlash" tugmasini bosing.
         """)
 
 if __name__ == "__main__":
