@@ -5,6 +5,8 @@ import time
 import numpy as np
 from PIL import Image
 import io
+import base64
+import os
 
 # Sahifa konfiguratsiyasi
 st.set_page_config(page_title="Tana Harakatlarini Aniqlash", page_icon="🏃‍♂️", layout="wide")
@@ -69,129 +71,177 @@ last_detection_time = {
     "O'ng oyoq": 0
 }
 
+# Temp fayllar uchun papka yaratish
+def ensure_dir(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
 # Video frameni o'qish va qayta ishlash
 def process_frame(image, prev_landmarks):
-    # RGB formatiga o'tkazish (MediaPipe RGB formatida ishlaydi)
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    # Pose model orqali harakatlarni aniqlash
-    with mp_pose.Pose(
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5) as pose:
+    try:
+        # RGB formatiga o'tkazish (MediaPipe RGB formatida ishlaydi)
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        results = pose.process(image_rgb)
-    
-    if results.pose_landmarks:
-        # O'zgartirilgan rasmni yaratish
-        annotated_image = image.copy()
-        mp_drawing.draw_landmarks(
-            annotated_image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-        
-        # Harakatlarni aniqlash
-        current_time = time.time()
-        
-        if prev_landmarks:
-            current_landmarks = results.pose_landmarks.landmark
+        # Pose model orqali harakatlarni aniqlash
+        with mp_pose.Pose(
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5) as pose:
             
-            # Har bir muhim tana qismi uchun tekshirish
-            for idx, part_name in body_parts.items():
-                # Agar bu tana qismi avval harakatlanayotgan deb belgilangan bo'lsa va vaqt o'tgan bo'lsa
-                if moving_parts[part_name] and (current_time - last_detection_time[part_name]) > reset_interval:
-                    moving_parts[part_name] = False
-                
-                prev = prev_landmarks[idx]
-                curr = current_landmarks[idx]
-                
-                dx = abs(curr.x - prev.x)
-                dy = abs(curr.y - prev.y)
-                
-                # Harakat aniqlangan bo'lsa
-                if dx > threshold or dy > threshold:
-                    # Agar bu tana qismi hali harakatlanayotgan deb belgilanmagan bo'lsa
-                    if not moving_parts[part_name]:
-                        moving_parts[part_name] = True
-                        last_detection_time[part_name] = current_time
+            results = pose.process(image_rgb)
         
-        # O'ng panelda holatlarni yangilash
-        for part, is_moving in moving_parts.items():
-            status = "Harakatlanmoqda 🟢" if is_moving else "Harakatsiz 🔴"
-            status_placeholders[part].write(f"{part}: {status}")
+        if results.pose_landmarks:
+            # O'zgartirilgan rasmni yaratish
+            annotated_image = image.copy()
+            mp_drawing.draw_landmarks(
+                annotated_image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            
+            # Harakatlarni aniqlash
+            current_time = time.time()
+            
+            if prev_landmarks:
+                current_landmarks = results.pose_landmarks.landmark
+                
+                # Har bir muhim tana qismi uchun tekshirish
+                for idx, part_name in body_parts.items():
+                    # Agar bu tana qismi avval harakatlanayotgan deb belgilangan bo'lsa va vaqt o'tgan bo'lsa
+                    if moving_parts[part_name] and (current_time - last_detection_time[part_name]) > reset_interval:
+                        moving_parts[part_name] = False
+                    
+                    prev = prev_landmarks[idx]
+                    curr = current_landmarks[idx]
+                    
+                    dx = abs(curr.x - prev.x)
+                    dy = abs(curr.y - prev.y)
+                    
+                    # Harakat aniqlangan bo'lsa
+                    if dx > threshold or dy > threshold:
+                        # Agar bu tana qismi hali harakatlanayotgan deb belgilanmagan bo'lsa
+                        if not moving_parts[part_name]:
+                            moving_parts[part_name] = True
+                            last_detection_time[part_name] = current_time
+            
+            # O'ng panelda holatlarni yangilash
+            for part, is_moving in moving_parts.items():
+                status = "Harakatlanmoqda 🟢" if is_moving else "Harakatsiz 🔴"
+                status_placeholders[part].write(f"{part}: {status}")
+            
+            # Joriy holatni qaytarish
+            return annotated_image, results.pose_landmarks.landmark
         
-        # Joriy holatni qaytarish
-        return annotated_image, results.pose_landmarks.landmark
-    
-    return image, prev_landmarks
+        return image, prev_landmarks
+    except Exception as e:
+        st.error(f"Frameni qayta ishlashda xatolik: {str(e)}")
+        return image, prev_landmarks
 
 def main():
     stframe = col1.empty()
     
     if input_type == "Video yuklash":
-        uploaded_file = st.file_uploader("Video faylni yuklang", type=["mp4", "avi", "mov"])
+        # Video yuklash va qayta ishlashni yordam matni        
+        st.markdown("""
+        **Video yuklash bo'yicha ma'lumot:**
+        
+        - Telefonda video yuklashda muammo bo'lsa, video hajmi kichikroq bo'lishiga ishonch hosil qiling
+        - MP4 formatidagi videolarni tanlash tavsiya etiladi
+        - Video yuklangandan keyin "Videoni qayta ishlash" tugmasini bosing
+        """)
+        
+        uploaded_file = st.file_uploader("Video faylni yuklang", type=["mp4", "avi", "mov"], accept_multiple_files=False)
         
         if uploaded_file is not None:
-            # Video faylni saqlash
-            temp_file = "temp_video.mp4"
-            with open(temp_file, "wb") as f:
-                f.write(uploaded_file.read())
-            
-            # Video faylni ochish
-            cap = cv2.VideoCapture(temp_file)
-            prev_landmarks = None
-            
-            # Video parametrlarini olish
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            
-            # Progress bar
-            progress_bar = st.progress(0)
-            
-            # Ishga tushirish va to'xtatish tugmalari
-            col_start, col_stop = st.columns(2)
-            start_button = col_start.button("Videoni qayta ishlash")
-            stop_button = col_stop.button("To'xtatish")
-            
-            # To'xtatish o'zgaruvchisi
-            if 'processing' not in st.session_state:
-                st.session_state.processing = False
-            
-            if start_button:
-                st.session_state.processing = True
-            
-            if stop_button:
-                st.session_state.processing = False
-                st.warning("Video qayta ishlash to'xtatildi!")
-            
-            # Video qayta ishlash
-            if st.session_state.processing:
-                frame_counter = 0
+            try:
+                # Temp papkani yaratish
+                ensure_dir('temp')
                 
-                while st.session_state.processing and frame_counter < frame_count:
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    
-                    # Frameni qayta ishlash
-                    processed_frame, prev_landmarks = process_frame(frame, prev_landmarks)
-                    
-                    # Frameni ko'rsatish
-                    stframe.image(processed_frame, channels="BGR", use_container_width=True)
-                    
-                    # Progress barni yangilash
-                    progress_bar.progress((frame_counter + 1) / frame_count)
-                    
-                    # FPS ni nazorat qilish
-                    time.sleep(1/fps)
-                    
-                    frame_counter += 1
-                    
-                    # To'xtatish tugmasi bosilganini tekshirish
-                    if not st.session_state.processing:
-                        break
+                # Video faylni saqlash
+                temp_file = "temp/video.mp4"
+                with open(temp_file, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
                 
-                cap.release()
-                if frame_counter >= frame_count:
-                    st.success("Video qayta ishlandi!")
-                    st.session_state.processing = False
+                st.success(f"Video muvaffaqiyatli yuklandi! Hajmi: {round(os.path.getsize(temp_file)/1024/1024, 2)} MB")
+                
+                # Video faylni ochish
+                cap = cv2.VideoCapture(temp_file)
+                
+                if not cap.isOpened():
+                    st.error("Video faylini ochib bo'lmadi. Fayl formati qo'llab-quvvatlanmasligi mumkin.")
+                else:
+                    prev_landmarks = None
+                    
+                    # Video parametrlarini olish
+                    fps = int(cap.get(cv2.CAP_PROP_FPS))
+                    if fps <= 0:
+                        fps = 25  # Agar FPS aniqlanmasa, default qiymat
+                    
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    if frame_count <= 0:
+                        # Frameni hisoblash
+                        frame_count = 1000  # Taxminiy qiymat
+                    
+                    # Video ma'lumotlarini ko'rsatish
+                    st.write(f"Video uzunligi: ~{frame_count/fps:.1f} soniya, FPS: {fps}")
+                    
+                    # Progress bar
+                    progress_bar = st.progress(0)
+                    
+                    # Ishga tushirish va to'xtatish tugmalari
+                    col_start, col_stop = st.columns(2)
+                    start_button = col_start.button("Videoni qayta ishlash")
+                    stop_button = col_stop.button("To'xtatish")
+                    
+                    # To'xtatish o'zgaruvchisi
+                    if 'processing' not in st.session_state:
+                        st.session_state.processing = False
+                    
+                    if start_button:
+                        st.session_state.processing = True
+                    
+                    if stop_button:
+                        st.session_state.processing = False
+                        st.warning("Video qayta ishlash to'xtatildi!")
+                    
+                    # Video qayta ishlash
+                    if st.session_state.processing:
+                        frame_counter = 0
+                        
+                        while st.session_state.processing and frame_counter < frame_count:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            try:
+                                # Frameni qayta ishlash
+                                processed_frame, prev_landmarks = process_frame(frame, prev_landmarks)
+                                
+                                # Frameni ko'rsatish
+                                stframe.image(processed_frame, channels="BGR", use_container_width=True)
+                                
+                                # Progress barni yangilash
+                                progress_value = min(1.0, (frame_counter + 1) / frame_count)
+                                progress_bar.progress(progress_value)
+                                
+                                # FPS ni nazorat qilish
+                                time.sleep(0.1)  # Telefonlar uchun sekinroq ko'rsatish
+                                
+                                frame_counter += 1
+                                
+                                # To'xtatish tugmasi bosilganini tekshirish
+                                if not st.session_state.processing:
+                                    break
+                            except Exception as e:
+                                st.error(f"Frame {frame_counter} qayta ishlashda xatolik: {str(e)}")
+                                break
+                        
+                        cap.release()
+                        
+                        if frame_counter >= frame_count:
+                            st.success("Video qayta ishlandi!")
+                        else:
+                            st.info(f"Video qayta ishlash {frame_counter}/{frame_count} frameda to'xtadi.")
+                        
+                        st.session_state.processing = False
+            except Exception as e:
+                st.error(f"Video bilan ishlashda xato: {str(e)}")
     
     elif input_type == "Test rejimi":
         st.warning("Bu rejim test uchun mo'ljallangan. Haqiqiy kamera o'rniga test tasvir ishlatiladi.")
