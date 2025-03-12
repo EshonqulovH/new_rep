@@ -119,45 +119,101 @@ def process_frame(image, prev_landmarks):
     
     return image, prev_landmarks
 
+def process_uploaded_image(uploaded_file, prev_landmarks=None):
+    # Yuklangan rasmni o'qish
+    image = Image.open(uploaded_file)
+    image = np.array(image)
+    
+    # RGB formatidan BGR formatiga o'tkazish (OpenCV RGB formatida ishlaydi)
+    if image.shape[2] == 3:  # RGB rasm
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    
+    # Rasmni qayta ishlash
+    processed_image, landmarks = process_frame(image, prev_landmarks)
+    
+    return processed_image, landmarks
+
 def main():
-    # Video oqimini boshlash
-    start_button = st.button("Kamerani yoqish")
-    stop_button = st.button("To'xtatish")
+    # Kamera mavjudligini tekshirish uchun flaglar
+    is_camera_available = False
     
-    stframe = col1.empty()
-    
-    # Kamerani yoqish
-    if start_button or ('camera_on' in st.session_state and st.session_state['camera_on']):
-        st.session_state['camera_on'] = True
-        
-        if stop_button:
-            st.session_state['camera_on'] = False
-            return
-        
+    # Kamera mavjudligini tekshirish
+    try:
         cap = cv2.VideoCapture(0)
-        prev_landmarks = None
+        is_camera_available = cap.isOpened()
+        cap.release()  # Kamerani yopish
+    except:
+        is_camera_available = False
+    
+    # Streamlit Cloud uchun ogohlantirishni ko'rsatish
+    if not is_camera_available:
+        st.warning("⚠️ Kamera topilmadi yoki Streamlit Cloud'da ishlamoqdamiz. Kamera ishlamaydi.")
+        st.info("Tana harakatlarini aniqlash uchun rasm yuklang.")
         
-        if cap.isOpened():
-            st.write("Kamera muvaffaqiyatli ishga tushdi!")
+        # Rasm yuklash imkoniyatini taqdim etish
+        uploaded_file = st.file_uploader("Rasm yuklang", type=["jpg", "jpeg", "png"])
+        
+        if uploaded_file is not None:
+            # Yuklangan rasmni qayta ishlash
+            processed_image, _ = process_uploaded_image(uploaded_file)
             
-            while st.session_state['camera_on']:
-                success, image = cap.read()
-                if not success:
-                    st.error("Kameradan videoni olishda xatolik yuz berdi.")
-                    break
-                
-                # Frameni qayta ishlash
-                processed_image, prev_landmarks = process_frame(image, prev_landmarks)
-                
-                # Frameni ko'rsatish
-                stframe.image(processed_image, channels="BGR", use_column_width=True)
-                
-                # Streamlit-da framerate ni pasaytirish uchun kichik kutish
-                time.sleep(0.01)
+            # Rasmni ko'rsatish
+            col1.image(processed_image, channels="BGR", use_column_width=True)
             
-            cap.release()
-        else:
-            st.error("Kamerani ishga tushirishda xatolik yuz berdi.")
+            # Tana holatlarini yangilash (statik rasm uchun harakatlangan emas)
+            for part in moving_parts.keys():
+                status_placeholders[part].write(f"{part}: Aniqlanmadi ⚪")
+            
+            st.info("Izoh: Statik rasmlar uchun harakat aniqlanmaydi.")
+        
+        # Qo'shimcha ma'lumot
+        st.markdown("""
+        ## Streamlit Cloud'da ishlash uchun 
+        1. Ilovani mahalliy (local) o'rnatib ishlatish tavsiya etiladi
+        2. Quyidagi buyruqni terminal yoki command prompt'da bajaring:
+        ```
+        streamlit run app.py
+        ```
+        """)
+    else:
+        # Kamera mavjud bo'lsa, asosiy interfeysni ko'rsatish
+        start_button = st.button("Kamerani yoqish")
+        stop_button = st.button("To'xtatish")
+        
+        stframe = col1.empty()
+        
+        # Kamerani yoqish
+        if start_button or ('camera_on' in st.session_state and st.session_state['camera_on']):
+            st.session_state['camera_on'] = True
+            
+            if stop_button:
+                st.session_state['camera_on'] = False
+                return
+            
+            cap = cv2.VideoCapture(0)
+            prev_landmarks = None
+            
+            if cap.isOpened():
+                st.write("Kamera muvaffaqiyatli ishga tushdi!")
+                
+                while st.session_state['camera_on']:
+                    success, image = cap.read()
+                    if not success:
+                        st.error("Kameradan videoni olishda xatolik yuz berdi.")
+                        break
+                    
+                    # Frameni qayta ishlash
+                    processed_image, prev_landmarks = process_frame(image, prev_landmarks)
+                    
+                    # Frameni ko'rsatish
+                    stframe.image(processed_image, channels="BGR", use_column_width=True)
+                    
+                    # Streamlit-da framerate ni pasaytirish uchun kichik kutish
+                    time.sleep(0.01)
+                
+                cap.release()
+            else:
+                st.error("Kamerani ishga tushirishda xatolik yuz berdi.")
     
     # Qo'shimcha ma'lumot
     with st.expander("Ilova haqida ma'lumot"):
@@ -172,7 +228,7 @@ def main():
         - Chap oyoq
         - O'ng oyoq
         
-        Ilovani ishlatish uchun "Kamerani yoqish" tugmasini bosing.
+        Ilovani ishlatish uchun "Kamerani yoqish" tugmasini bosing yoki rasm yuklang.
         """)
 
 if __name__ == "__main__":
