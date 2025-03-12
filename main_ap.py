@@ -14,6 +14,13 @@ st.title("Tana Harakatlarini Aniqlash Ilovasi")
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 
+# Sidebar sozlamalari
+st.sidebar.header("Sozlamalar")
+# Harakat aniqlash chegarasi
+threshold = st.sidebar.slider("Harakat sezgirligi", min_value=0.01, max_value=0.1, value=0.03, step=0.01)
+# Reset interval
+reset_interval = st.sidebar.slider("Harakatlanish belgilash vaqti (soniya)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
+
 # Asosiy tana qismlari indekslari
 body_parts = {
     0: "Bosh",           # Bosh (Nose)
@@ -32,15 +39,8 @@ body_parts = {
 # Holatlar kolonkalarini yaratish
 col1, col2 = st.columns([3, 1])
 
-# Asosiy qismga sozlamalarni qo'shish
-with col1:
-    st.subheader("Sozlamalar")
-    # Harakat aniqlash chegarasi
-    threshold = st.slider("Harakat sezgirligi", min_value=0.01, max_value=0.1, value=0.03, step=0.01)
-    # Reset interval
-    reset_interval = st.slider("Harakatlanish belgilash vaqti (soniya)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
-    # Input turini tanlash
-    input_type = st.radio("Kirish turini tanlang", ["Video yuklash", "Test rejimi"], horizontal=True)
+# Asosiy oynaga kirish turini tanlash
+input_type = st.radio("Kirish turini tanlang", ["Video yuklash", "Test rejimi"], horizontal=True)
 
 # Streamlit o'ng panelda tana qismlarini ko'rsatamiz
 with col2:
@@ -123,7 +123,7 @@ def process_frame(image, prev_landmarks):
     return image, prev_landmarks
 
 def main():
-    stframe = st.empty()
+    stframe = col1.empty()
     
     if input_type == "Video yuklash":
         uploaded_file = st.file_uploader("Video faylni yuklang", type=["mp4", "avi", "mov"])
