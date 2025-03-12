@@ -173,7 +173,7 @@ def main():
                     processed_frame, prev_landmarks = process_frame(frame, prev_landmarks)
                     
                     # Frameni ko'rsatish
-                    stframe.image(processed_frame, channels="BGR", use_column_width=True)
+                    stframe.image(processed_frame, channels="BGR", use_container_width=True)
                     
                     # Progress barni yangilash
                     progress_bar.progress((frame_counter + 1) / frame_count)
@@ -207,7 +207,7 @@ def main():
         cv2.line(img, (320, 300), (280, 400), (0, 0, 255), 2)  # Chap oyoq
         cv2.line(img, (320, 300), (360, 400), (0, 0, 255), 2)  # O'ng oyoq
         
-        stframe.image(img, channels="BGR", use_column_width=True)
+        stframe.image(img, channels="BGR", use_container_width=True)
         
         st.info("Test rejimida harakatlarni aniqlash tavsiya etilmaydi. Haqiqiy videoni yuklang.")
     
