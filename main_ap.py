@@ -105,7 +105,6 @@ def process_frame(image, prev_landmarks):
                 if dx > threshold or dy > threshold:
                     # Agar bu tana qismi hali harakatlanayotgan deb belgilanmagan bo'lsa
                     if not moving_parts[part_name]:
-                        st.write(f"{part_name} harakatlandi!")
                         moving_parts[part_name] = True
                         last_detection_time[part_name] = current_time
         
@@ -145,9 +144,27 @@ def main():
             # Progress bar
             progress_bar = st.progress(0)
             
+            # Ishga tushirish va to'xtatish tugmalari
+            col_start, col_stop = st.columns(2)
+            start_button = col_start.button("Videoni qayta ishlash")
+            stop_button = col_stop.button("To'xtatish")
+            
+            # To'xtatish o'zgaruvchisi
+            if 'processing' not in st.session_state:
+                st.session_state.processing = False
+            
+            if start_button:
+                st.session_state.processing = True
+            
+            if stop_button:
+                st.session_state.processing = False
+                st.warning("Video qayta ishlash to'xtatildi!")
+            
             # Video qayta ishlash
-            if st.button("Videoni qayta ishlash"):
-                for i in range(frame_count):
+            if st.session_state.processing:
+                frame_counter = 0
+                
+                while st.session_state.processing and frame_counter < frame_count:
                     ret, frame = cap.read()
                     if not ret:
                         break
@@ -159,13 +176,21 @@ def main():
                     stframe.image(processed_frame, channels="BGR", use_column_width=True)
                     
                     # Progress barni yangilash
-                    progress_bar.progress((i + 1) / frame_count)
+                    progress_bar.progress((frame_counter + 1) / frame_count)
                     
                     # FPS ni nazorat qilish
                     time.sleep(1/fps)
+                    
+                    frame_counter += 1
+                    
+                    # To'xtatish tugmasi bosilganini tekshirish
+                    if not st.session_state.processing:
+                        break
                 
                 cap.release()
-                st.success("Video qayta ishlandi!")
+                if frame_counter >= frame_count:
+                    st.success("Video qayta ishlandi!")
+                    st.session_state.processing = False
     
     elif input_type == "Test rejimi":
         st.warning("Bu rejim test uchun mo'ljallangan. Haqiqiy kamera o'rniga test tasvir ishlatiladi.")
@@ -200,6 +225,7 @@ def main():
         - O'ng oyoq
         
         Ilovani ishlatish uchun video faylni yuklang va "Videoni qayta ishlash" tugmasini bosing.
+        To'xtatish uchun "To'xtatish" tugmasini bosing.
         """)
 
 if __name__ == "__main__":
