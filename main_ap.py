@@ -20,8 +20,8 @@ mp_drawing = mp.solutions.drawing_utils
 st.sidebar.header("Sozlamalar")
 # Harakat aniqlash chegarasi
 threshold = st.sidebar.slider("Harakat sezgirligi", min_value=0.01, max_value=0.1, value=0.03, step=0.01)
-# Reset interval
-reset_interval = st.sidebar.slider("Harakatlanish belgilash vaqti (soniya)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
+# Reset interval set as a constant instead of user-configurable
+reset_interval = 1.0  # Default value in seconds
 
 # Asosiy tana qismlari indekslari
 body_parts = {
